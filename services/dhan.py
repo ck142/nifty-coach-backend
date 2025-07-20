@@ -2,7 +2,7 @@ import os
 import requests
 
 def fetch_trades():
-    url = "https://api.dhan.co/orders/tradebook"
+    url = "https://api.dhan.co/trades"
     headers = {
         "access-token": os.getenv("DHAN_ACCESS_TOKEN"),
         "client-id": os.getenv("DHAN_CLIENT_ID")
@@ -13,27 +13,22 @@ def fetch_trades():
 
     try:
         data = response.json()
-        print("Dhan response JSON:", data)  # ✅ << THIS LINE
+        print("Raw /trades response:", data)
 
-        # Normalize to list if single object returned
-        if isinstance(data, dict):
-            data = [data]
-        elif not isinstance(data, list):
-            raise ValueError("Unexpected response type")
+        if not isinstance(data, list):
+            raise ValueError(f"Expected list of trades but got: {type(data)}")
 
         trades = []
         for t in data:
-            if t.get("orderId") is None:
-                continue
             trades.append({
                 "order_id": t.get("orderId"),
                 "symbol": t.get("securityId"),
                 "side": t.get("transactionType"),
-                "qty": t.get("filledQty"),
-                "price": t.get("averagePrice"),
-                "timestamp": t.get("orderTimestamp")
+                "qty": t.get("tradedQuantity"),
+                "price": t.get("tradedPrice"),
+                "timestamp": t.get("exchangeTime") or t.get("createTime")
             })
         return trades
 
     except Exception as e:
-        raise Exception(f"Invalid JSON format from Dhan: {e}")
+        raise Exception(f"Error processing /trades response: {e}")
