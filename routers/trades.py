@@ -1,27 +1,39 @@
+import os
+import requests
 
-from fastapi import APIRouter
-from services.dhan import fetch_trades
-from db import SessionLocal, Trade
-from sqlalchemy.exc import SQLAlchemyError
+def fetch_trades():
+    url = "https://api.dhan.co/orders/tradebook"
+    headers = {
+        "access-token": os.getenv("DHAN_ACCESS_TOKEN"),
+        "client-id": os.getenv("DHAN_CLIENT_ID")
+    }
 
-router = APIRouter()
+    response = requests.get(url, headers=headers)
+    print("Status Code:", response.status_code)
 
-@router.post("/sync_trades")
-def sync_trades():
     try:
-        trades = fetch_trades()
-        print("Dhan response JSON:", response.json())
-        db = SessionLocal()
-        new_trades = 0
-        for trade in trades:
-            exists = db.query(Trade).filter_by(order_id=trade["order_id"]).first()
-            if not exists:
-                db.add(Trade(**trade))
-                new_trades += 1
-        db.commit()
-        db.close()
-        return {"message": f"Synced {new_trades} new trades."}
-    except SQLAlchemyError as e:
-        return {"error": f"Database error: {str(e)}"}
+        data = response.json()
+        print("Dhan response JSON:", data)  # ✅ << THIS LINE
+
+        # Normalize to list if single object returned
+        if isinstance(data, dict):
+            data = [data]
+        elif not isinstance(data, list):
+            raise ValueError("Unexpected response type")
+
+        trades = []
+        for t in data:
+            if t.get("orderId") is None:
+                continue
+            trades.append({
+                "order_id": t.get("orderId"),
+                "symbol": t.get("securityId"),
+                "side": t.get("transactionType"),
+                "qty": t.get("filledQty"),
+                "price": t.get("averagePrice"),
+                "timestamp": t.get("orderTimestamp")
+            })
+        return trades
+
     except Exception as e:
-        return {"error": f"General error: {str(e)}"}
+        raise Exception(f"Invalid JSON format from Dhan: {e}")
