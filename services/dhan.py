@@ -8,10 +8,10 @@ def fetch_trades():
         "client-id": os.getenv("DHAN_CLIENT_ID")
     }
 
-    response = requests.get(url, headers=headers)
-    print("Status Code:", response.status_code)
-
     try:
+        response = requests.get(url, headers=headers)
+        print("Status Code:", response.status_code)
+
         data = response.json()
         print("Raw /trades response:", data)
 
@@ -31,4 +31,4 @@ def fetch_trades():
         return trades
 
     except Exception as e:
-        raise Exception(f"Error processing /trades response: {e}")
+        raise Exception(f"Error processing /trades response: {str(e)}")
