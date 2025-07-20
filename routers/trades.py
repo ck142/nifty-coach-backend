@@ -24,3 +24,13 @@ def sync_trades():
         return {"error": f"Database error: {str(e)}"}
     except Exception as e:
         return {"error": f"General error: {str(e)}"}
+
+@router.get("/get_trades")
+def get_trades():
+    try:
+        db = SessionLocal()
+        results = db.query(Trade).order_by(Trade.timestamp.desc()).all()
+        db.close()
+        return [t.as_dict() for t in results]
+    except Exception as e:
+        return {"error": str(e)}

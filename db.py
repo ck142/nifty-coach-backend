@@ -20,5 +20,13 @@ class Trade(Base):
     price = Column(Float)
     timestamp = Column(DateTime)
 
-def init_db():
-    Base.metadata.create_all(bind=engine)
+    def as_dict(self):
+        return {
+            "id": self.id,
+            "order_id": self.order_id,
+            "symbol": self.symbol,
+            "side": self.side,
+            "qty": self.qty,
+            "price": self.price,
+            "timestamp": self.timestamp.isoformat() if self.timestamp else None
+        }
