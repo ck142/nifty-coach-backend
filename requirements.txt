@@ -2,5 +2,5 @@ fastapi
 uvicorn
 sqlalchemy
 requests
+dhanhq
 psycopg2-binary
-python-dotenv

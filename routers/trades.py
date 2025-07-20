@@ -1,76 +1,58 @@
 
 from fastapi import APIRouter
 from db import SessionLocal, Trade
-import requests
-from datetime import datetime
+from datetime import datetime, timedelta
 import os
+from dhanhq import dhanhq
 
 router = APIRouter()
 
-DHAN_BASE = "https://api.dhan.co"
-TOKEN = os.environ.get("DHAN_TOKEN")
+ACCESS_TOKEN = os.environ.get("DHAN_TOKEN")
 CLIENT_ID = os.environ.get("DHAN_CLIENT_ID")
 
-HEADERS = {
-    "access-token": TOKEN,
-    "client-id": CLIENT_ID
-}
+dhan = dhanhq(ACCESS_TOKEN, CLIENT_ID)
 
-def fetch_trade_history_from_orders():
+def fetch_trade_history_from_sdk():
     session = SessionLocal()
     new_trades = 0
-    total_orders = 0
+    total_fetched = 0
 
-    url = f"{DHAN_BASE}/orders"
-    
-    response = requests.get(url, headers=HEADERS)
-    print(f"[DEBUG] access-token: {HEADERS.get('access-token')}")
-    print(f"[DEBUG] client-id: {HEADERS.get('client-id')}")
-    if response.status_code != 200:
-        print(f"[ERROR] Failed to fetch /orders: {response.status_code}")
-        print(response.text)
-        return new_trades, total_orders
-
+    today = datetime.now().date()
+    from_date = today - timedelta(days=14)
     try:
-        orders = response.json()
+        trades = dhan.get_trade_history(str(from_date), str(today))
+        print(f"[INFO] Got {len(trades)} trades from SDK")
+        total_fetched = len(trades)
     except Exception as e:
-        print(f"[ERROR] Could not decode /orders JSON: {e}")
-        return new_trades, total_orders
+        print(f"[ERROR] Failed to fetch from SDK: {e}")
+        return 0, 0
 
-    print(f"[INFO] Pulled {len(orders)} orders")
-    total_orders = len(orders)
-
-    for order in orders:
+    for trade in trades:
         try:
-            status = order.get("orderStatus")
-            if status not in ["TRADED", "EXECUTED", "COMPLETED"]:
-                continue
-
-            oid = f"{order.get('orderId')}_vOrders"
+            oid = f"{trade.get('orderId')}_v12"
             if session.query(Trade).filter_by(order_id=oid).first():
                 continue
-
             t = Trade(
                 order_id=oid,
-                symbol=order.get("tradingSymbol"),
-                side=order.get("transactionType"),
-                qty=int(order.get("quantity", 0) or 0),
-                price=float(order.get("price", 0) or 0.0),
-                timestamp=datetime.strptime(order.get("exchangeTime"), "%Y-%m-%dT%H:%M:%S") if order.get("exchangeTime") else datetime.utcnow()
+                symbol=trade.get("tradingSymbol"),
+                side=trade.get("transactionType"),
+                qty=int(trade.get("quantity", 0) or 0),
+                price=float(trade.get("price", 0) or 0.0),
+                timestamp=datetime.strptime(trade.get("exchangeTime"), "%Y-%m-%dT%H:%M:%S") if trade.get("exchangeTime") else datetime.utcnow()
             )
             session.add(t)
             new_trades += 1
         except Exception as e:
-            print(f"[ERROR] Skipping order due to: {e}")
+            print(f"[ERROR] Skipping trade due to: {e}")
 
     session.commit()
     session.close()
-    return new_trades, total_orders
+    return new_trades, total_fetched
 
 @router.post("/sync_trades")
 def sync_trades():
     try:
-        new, total = fetch_trade_history_from_orders()
-        return {"message": f"Pulled {total} orders, synced {new} new trades."}
+        new, total = fetch_trade_history_from_sdk()
+        return {"message": f"Pulled {total} trades, synced {new} new trades."}
     except Exception as e:
         return {"error": f"General error: {e}"}
