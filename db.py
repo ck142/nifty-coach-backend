@@ -1,24 +1,29 @@
 
-from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from models import Trade
+from sqlalchemy.orm import Session
+from db_setup import SessionLocal
 
-import os
+def save_trade_to_db(trade_data: dict) -> bool:
+    session: Session = SessionLocal()
+    try:
+        existing = session.query(Trade).filter_by(order_id=trade_data["order_id"]).first()
+        if existing:
+            return False
 
-DATABASE_URL = os.getenv("DATABASE_URL")
-engine = create_engine(DATABASE_URL)
-SessionLocal = sessionmaker(bind=engine)
-Base = declarative_base()
-
-class Trade(Base):
-    __tablename__ = "trades"
-    id = Column(Integer, primary_key=True, index=True)
-    order_id = Column(String, unique=True, index=True)
-    symbol = Column(String)
-    side = Column(String)
-    qty = Column(Integer)
-    price = Column(Float)
-    timestamp = Column(DateTime)
-
-def init_db():
-    Base.metadata.create_all(bind=engine)
+        new_trade = Trade(
+            order_id=trade_data["order_id"],
+            symbol=trade_data["symbol"],
+            side=trade_data["side"],
+            qty=trade_data["qty"],
+            price=trade_data["price"],
+            timestamp=trade_data["timestamp"]
+        )
+        session.add(new_trade)
+        session.commit()
+        return True
+    except Exception as e:
+        print(f"[ERROR] DB insert failed: {e}")
+        session.rollback()
+        return False
+    finally:
+        session.close()
