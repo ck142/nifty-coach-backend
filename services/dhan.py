@@ -1,3 +1,4 @@
+
 import os
 import requests
 
@@ -9,17 +10,19 @@ def fetch_trades():
     }
 
     try:
-        response = requests.get(url, headers=headers)
-        print("Status Code:", response.status_code)
+        resp = requests.get(url, headers=headers)
+        print("Status Code:", resp.status_code)
 
-        data = response.json()
+        data = resp.json()
         print("Raw /trades response:", data)
 
         if not isinstance(data, list):
-            raise ValueError(f"Expected list of trades but got: {type(data)}")
+            raise Exception(f"Expected list of trades, got: {type(data)}")
 
         trades = []
         for t in data:
+            if t.get("orderId") is None:
+                continue
             trades.append({
                 "order_id": t.get("orderId"),
                 "symbol": t.get("securityId"),
@@ -31,4 +34,5 @@ def fetch_trades():
         return trades
 
     except Exception as e:
+        print("Exception:", e)
         raise Exception(f"Error processing /trades response: {str(e)}")
