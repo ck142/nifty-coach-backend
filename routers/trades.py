@@ -1,4 +1,3 @@
-
 from fastapi import APIRouter
 from db import SessionLocal, Trade
 import requests
@@ -29,17 +28,23 @@ def fetch_trade_history_v1():
         for page in range(1, 6):
             url = f"{DHAN_BASE}/history/tradeHistory/{date}/{date}/{page}"
             response = requests.get(url, headers=HEADERS)
-            
+            print(f"[DEBUG] {url} → {response.status_code}")
+            print(f"[DEBUG] Response Text: {response.text}")
+
             if response.status_code == 404:
                 print(f"[INFO] No more pages for {date} after page {page - 1}")
-                break  # No more pages to fetch
-
+                break
             if response.status_code != 200:
                 print(f"[ERROR] {url}: {response.status_code}")
                 continue
-            data = response.json()
-            print(f"[{date}] Page {page}: {len(data)} trades")
-            total_pulled += len(data)
+
+            try:
+                data = response.json()
+                print(f"[{date}] Page {page}: {len(data)} trades")
+                total_pulled += len(data)
+            except Exception as e:
+                print(f"[ERROR] JSON decode failed: {e}")
+                continue
 
             for trade in data:
                 try:
@@ -50,14 +55,18 @@ def fetch_trade_history_v1():
                         order_id=oid,
                         symbol=trade.get("tradingSymbol"),
                         side=trade.get("transactionType"),
-                        qty=int(trade.get("quantity", 0)),
-                        price=float(trade.get("price", 0)),
-                        timestamp=datetime.strptime(trade.get("exchangeTime"), "%Y-%m-%dT%H:%M:%S") if trade.get("exchangeTime") else datetime.utcnow()
+                        qty=int(trade.get("quantity", 0) or 0),
+                        price=float(trade.get("price", 0) or 0.0),
+                        timestamp=datetime.strptime(
+                            trade.get("exchangeTime"),
+                            "%Y-%m-%dT%H:%M:%S"
+                        ) if trade.get("exchangeTime") else datetime.utcnow()
                     )
                     session.add(t)
                     new_trades += 1
                 except Exception as e:
-                    print(f"Skipping trade due to error: {e}")
+                    print(f"[ERROR] Skipping trade due to: {e}")
+
         session.commit()
     session.close()
     return new_trades, total_pulled
