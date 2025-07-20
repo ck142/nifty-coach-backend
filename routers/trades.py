@@ -29,6 +29,11 @@ def fetch_trade_history_v1():
         for page in range(1, 6):
             url = f"{DHAN_BASE}/history/tradeHistory/{date}/{date}/{page}"
             response = requests.get(url, headers=HEADERS)
+            
+            if response.status_code == 404:
+                print(f"[INFO] No more pages for {date} after page {page - 1}")
+                break  # No more pages to fetch
+
             if response.status_code != 200:
                 print(f"[ERROR] {url}: {response.status_code}")
                 continue
