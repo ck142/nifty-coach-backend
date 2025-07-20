@@ -16,17 +16,22 @@ def fetch_trades():
     print("Response Body:", response.text)
 
     if response.ok:
-        data = response.json()
-        trades = []
-        for t in data:
-            trades.append({
-                "order_id": t.get("orderId"),
-                "symbol": t.get("securityId"),
-                "side": t.get("transactionType"),
-                "qty": t.get("filledQty"),
-                "price": t.get("averagePrice"),
-                "timestamp": t.get("orderTimestamp")
-            })
-        return trades
+        try:
+            data = response.json()
+            if not isinstance(data, list):
+                raise ValueError("Expected list of trades but got:", data)
+            trades = []
+            for t in data:
+                trades.append({
+                    "order_id": t.get("orderId"),
+                    "symbol": t.get("securityId"),
+                    "side": t.get("transactionType"),
+                    "qty": t.get("filledQty"),
+                    "price": t.get("averagePrice"),
+                    "timestamp": t.get("orderTimestamp")
+                })
+            return trades
+        except Exception as e:
+            raise Exception(f"Invalid JSON format from Dhan: {e}")
     else:
         raise Exception(f"Dhan API error: {response.status_code} {response.text}")
