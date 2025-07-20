@@ -1,6 +1,5 @@
-
 from fastapi import APIRouter
-from db import save_trade_to_db
+from db import save_trade_to_db, get_all_trades
 from datetime import datetime
 import random
 
@@ -28,14 +27,9 @@ def sync_trades():
 
     return {"message": f"Synced {new_count} new trades.", "trades": dummy_trades}
 
+
 @router.get("/get_trades")
 def get_trades():
-    from db import get_db_connection
-    from psycopg2.extras import RealDictCursor
-
-    conn = get_db_connection()
-    cursor = conn.cursor(cursor_factory=RealDictCursor)
-    cursor.execute("SELECT * FROM trades ORDER BY timestamp DESC LIMIT 500;")
-    trades = cursor.fetchall()
-    conn.close()
+    # Get all trades using helper from db.py
+    trades = get_all_trades(limit=500)
     return trades

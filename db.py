@@ -1,29 +1,54 @@
+import os
+import psycopg2
+from psycopg2.extras import RealDictCursor
+from datetime import datetime
 
-from models import Trade
-from sqlalchemy.orm import Session
-from db_setup import SessionLocal
+# Set up database connection (from environment or hardcoded fallback)
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://user:password@localhost:5432/tradedb")
 
-def save_trade_to_db(trade_data: dict) -> bool:
-    session: Session = SessionLocal()
+def get_db_connection():
+    return psycopg2.connect(DATABASE_URL)
+
+def save_trade_to_db(trade):
     try:
-        existing = session.query(Trade).filter_by(order_id=trade_data["order_id"]).first()
-        if existing:
-            return False
+        conn = get_db_connection()
+        cursor = conn.cursor()
 
-        new_trade = Trade(
-            order_id=trade_data["order_id"],
-            symbol=trade_data["symbol"],
-            side=trade_data["side"],
-            qty=trade_data["qty"],
-            price=trade_data["price"],
-            timestamp=trade_data["timestamp"]
+        cursor.execute(
+            """
+            INSERT INTO trades (order_id, symbol, side, qty, price, timestamp)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            ON CONFLICT (order_id) DO NOTHING;
+            """,
+            (
+                trade["order_id"],
+                trade["symbol"],
+                trade["side"],
+                trade["qty"],
+                trade["price"],
+                trade["timestamp"] if isinstance(trade["timestamp"], datetime) else datetime.now(),
+            )
         )
-        session.add(new_trade)
-        session.commit()
+
+        conn.commit()
+        cursor.close()
+        conn.close()
         return True
     except Exception as e:
-        print(f"[ERROR] DB insert failed: {e}")
-        session.rollback()
+        print(f"[ERROR] Failed to save trade: {e}")
         return False
-    finally:
-        session.close()
+
+def get_all_trades(limit=500):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+
+        cursor.execute("SELECT * FROM trades ORDER BY timestamp DESC LIMIT %s;", (limit,))
+        trades = cursor.fetchall()
+
+        cursor.close()
+        conn.close()
+        return trades
+    except Exception as e:
+        print(f"[ERROR] Failed to fetch trades: {e}")
+        return []
