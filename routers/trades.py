@@ -10,6 +10,7 @@ router = APIRouter()
 def sync_trades():
     try:
         trades = fetch_trades()
+        print("Dhan response JSON:", response.json())
         db = SessionLocal()
         new_trades = 0
         for trade in trades:
