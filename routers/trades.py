@@ -21,7 +21,8 @@ def fetch_trade_history_from_sdk():
     from_date = today - timedelta(days=14)
     try:
         trades = dhan.get_trade_history(str(from_date), str(today))
-        print(f"[INFO] Got {len(trades)} trades from SDK")
+    print(f"[INFO] Got trades raw type: {type(trades)}")
+    print(f"[DEBUG] Raw trades response: {trades}")
         total_fetched = len(trades)
     except Exception as e:
         print(f"[ERROR] Failed to fetch from SDK: {e}")
