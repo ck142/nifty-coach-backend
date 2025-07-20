@@ -9,6 +9,8 @@ def fetch_trades():
         "client-id": os.getenv("DHAN_CLIENT_ID")
     }
     response = requests.get(url, headers=headers)
+    print("DHAN Response Status:", response.status_code)
+    print("DHAN Response Text:", response.text)
     if response.ok:
         data = response.json()
         trades = []

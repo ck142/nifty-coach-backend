@@ -19,3 +19,5 @@ def sync_trades():
     db.commit()
     db.close()
     return {"message": f"Synced {new_trades} new trades."}
+    except Exception as e:
+        return {"error": str(e)}
