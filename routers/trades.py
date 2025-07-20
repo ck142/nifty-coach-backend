@@ -22,6 +22,7 @@ def sync_trades():
 
     today = datetime.now().date()
     all_trades = []
+    segment = 2  # NSE F&O only
 
     for days_ago in range(0, 10):
         trade_date = today - timedelta(days=days_ago)
@@ -29,16 +30,22 @@ def sync_trades():
         page = 1
 
         while True:
-            url = f"{DHAN_BASE_URL}/history/tradeHistory/{trade_date_str}/{trade_date_str}/{page}"
+            url = f"{DHAN_BASE_URL}/history/tradeHistory/{trade_date_str}/{trade_date_str}/{segment}"
+            print(f"[DEBUG] Fetching: {url}")
             response = requests.get(url, headers=HEADERS)
             if response.status_code == 404:
+                print(f"[INFO] No trades for {trade_date_str} on page {page}")
                 break
             if response.status_code != 200:
                 return {"error": f"Failed to fetch trades: {response.status_code}", "details": response.text}
             trades = response.json()
+            print(f"[DEBUG] Response from Dhan for {trade_date_str}, page {page}: {trades}")
             if not trades:
                 break
             all_trades.extend(trades)
             page += 1
 
-    return {"message": f"Fetched {len(all_trades)} trades", "trades": all_trades[:5]}  # Only preview first 5 for now
+    return {
+        "message": f"Fetched {len(all_trades)} trades",
+        "trades": all_trades[:5]  # Preview
+    }
