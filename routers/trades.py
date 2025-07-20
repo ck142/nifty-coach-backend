@@ -32,13 +32,18 @@ def sync_trades():
 
     try:
         trades = response.json()
+        print(f"[DEBUG] Raw /orders response: {trades}")
     except Exception as e:
         return {"error": f"Failed to parse response: {e}"}
 
     filtered = []
     for trade in trades:
         try:
-            if trade.get("orderStatus") == "EXECUTED" and "OPTIDX" in trade.get("tradingSymbol", ""):
+            if (
+                isinstance(trade, dict)
+                and trade.get("orderStatus") == "EXECUTED"
+                and "OPTIDX" in trade.get("tradingSymbol", "")
+            ):
                 filtered.append({
                     "order_id": trade.get("orderId"),
                     "symbol": trade.get("tradingSymbol"),
