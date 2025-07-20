@@ -22,8 +22,10 @@ def fetch_trade_history_from_orders():
     total_orders = 0
 
     url = f"{DHAN_BASE}/orders"
+    
     response = requests.get(url, headers=HEADERS)
-
+    print(f"[DEBUG] access-token: {HEADERS.get('access-token')}")
+    print(f"[DEBUG] client-id: {HEADERS.get('client-id')}")
     if response.status_code != 200:
         print(f"[ERROR] Failed to fetch /orders: {response.status_code}")
         print(response.text)
