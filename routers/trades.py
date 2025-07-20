@@ -27,3 +27,15 @@ def sync_trades():
             new_count += 1
 
     return {"message": f"Synced {new_count} new trades.", "trades": dummy_trades}
+
+@router.get("/get_trades")
+def get_trades():
+    from db import get_db_connection
+    from psycopg2.extras import RealDictCursor
+
+    conn = get_db_connection()
+    cursor = conn.cursor(cursor_factory=RealDictCursor)
+    cursor.execute("SELECT * FROM trades ORDER BY timestamp DESC LIMIT 500;")
+    trades = cursor.fetchall()
+    conn.close()
+    return trades
