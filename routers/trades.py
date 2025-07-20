@@ -1,7 +1,8 @@
+
 from fastapi import APIRouter
 from db import SessionLocal, Trade
 import requests
-from datetime import datetime, timedelta
+from datetime import datetime
 import os
 
 router = APIRouter()
@@ -15,66 +16,59 @@ HEADERS = {
     "client-id": CLIENT_ID
 }
 
-def fetch_trade_history_v1():
+def fetch_trade_history_from_orders():
     session = SessionLocal()
     new_trades = 0
-    total_pulled = 0
-    today = datetime.now().date()
-    from_date = today - timedelta(days=14)
-    to_date = today
+    total_orders = 0
 
-    for date_offset in range((to_date - from_date).days + 1):
-        date = from_date + timedelta(days=date_offset)
-        for page in range(1, 6):
-            url = f"{DHAN_BASE}/history/tradeHistory/{date}/{date}/{page}"
-            response = requests.get(url, headers=HEADERS)
-            print(f"[DEBUG] {url} → {response.status_code}")
-            print(f"[DEBUG] Response Text: {response.text}")
+    url = f"{DHAN_BASE}/orders"
+    response = requests.get(url, headers=HEADERS)
 
-            if response.status_code == 404:
-                print(f"[INFO] No more pages for {date} after page {page - 1}")
-                break
-            if response.status_code != 200:
-                print(f"[ERROR] {url}: {response.status_code}")
+    if response.status_code != 200:
+        print(f"[ERROR] Failed to fetch /orders: {response.status_code}")
+        print(response.text)
+        return new_trades, total_orders
+
+    try:
+        orders = response.json()
+    except Exception as e:
+        print(f"[ERROR] Could not decode /orders JSON: {e}")
+        return new_trades, total_orders
+
+    print(f"[INFO] Pulled {len(orders)} orders")
+    total_orders = len(orders)
+
+    for order in orders:
+        try:
+            status = order.get("orderStatus")
+            if status not in ["TRADED", "EXECUTED", "COMPLETED"]:
                 continue
 
-            try:
-                data = response.json()
-                print(f"[{date}] Page {page}: {len(data)} trades")
-                total_pulled += len(data)
-            except Exception as e:
-                print(f"[ERROR] JSON decode failed: {e}")
+            oid = f"{order.get('orderId')}_vOrders"
+            if session.query(Trade).filter_by(order_id=oid).first():
                 continue
 
-            for trade in data:
-                try:
-                    oid = f"{trade.get('orderId')}_v1"
-                    if session.query(Trade).filter_by(order_id=oid).first():
-                        continue
-                    t = Trade(
-                        order_id=oid,
-                        symbol=trade.get("tradingSymbol"),
-                        side=trade.get("transactionType"),
-                        qty=int(trade.get("quantity", 0) or 0),
-                        price=float(trade.get("price", 0) or 0.0),
-                        timestamp=datetime.strptime(
-                            trade.get("exchangeTime"),
-                            "%Y-%m-%dT%H:%M:%S"
-                        ) if trade.get("exchangeTime") else datetime.utcnow()
-                    )
-                    session.add(t)
-                    new_trades += 1
-                except Exception as e:
-                    print(f"[ERROR] Skipping trade due to: {e}")
+            t = Trade(
+                order_id=oid,
+                symbol=order.get("tradingSymbol"),
+                side=order.get("transactionType"),
+                qty=int(order.get("quantity", 0) or 0),
+                price=float(order.get("price", 0) or 0.0),
+                timestamp=datetime.strptime(order.get("exchangeTime"), "%Y-%m-%dT%H:%M:%S") if order.get("exchangeTime") else datetime.utcnow()
+            )
+            session.add(t)
+            new_trades += 1
+        except Exception as e:
+            print(f"[ERROR] Skipping order due to: {e}")
 
-        session.commit()
+    session.commit()
     session.close()
-    return new_trades, total_pulled
+    return new_trades, total_orders
 
 @router.post("/sync_trades")
 def sync_trades():
     try:
-        new_v1, pulled_v1 = fetch_trade_history_v1()
-        return {"message": f"Pulled {pulled_v1} trades, synced {new_v1} new trades."}
+        new, total = fetch_trade_history_from_orders()
+        return {"message": f"Pulled {total} orders, synced {new} new trades."}
     except Exception as e:
         return {"error": f"General error: {e}"}
