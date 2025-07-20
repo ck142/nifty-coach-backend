@@ -1,36 +1,66 @@
 
 from fastapi import APIRouter
-from services.dhan import fetch_trades_combined
 from db import SessionLocal, Trade
-from sqlalchemy.exc import SQLAlchemyError
+import requests
+from datetime import datetime, timedelta
+import os
 
 router = APIRouter()
+
+DHAN_BASE = "https://api.dhan.co"
+TOKEN = os.environ.get("DHAN_TOKEN")
+CLIENT_ID = os.environ.get("DHAN_CLIENT_ID")
+
+HEADERS = {
+    "access-token": TOKEN,
+    "client-id": CLIENT_ID
+}
+
+def fetch_trade_history_v1():
+    session = SessionLocal()
+    new_trades = 0
+    total_pulled = 0
+    today = datetime.now().date()
+    from_date = today - timedelta(days=14)
+    to_date = today
+
+    for date_offset in range((to_date - from_date).days + 1):
+        date = from_date + timedelta(days=date_offset)
+        for page in range(1, 6):
+            url = f"{DHAN_BASE}/history/tradeHistory/{date}/{date}/{page}"
+            response = requests.get(url, headers=HEADERS)
+            if response.status_code != 200:
+                print(f"[ERROR] {url}: {response.status_code}")
+                continue
+            data = response.json()
+            print(f"[{date}] Page {page}: {len(data)} trades")
+            total_pulled += len(data)
+
+            for trade in data:
+                try:
+                    oid = f"{trade.get('orderId')}_v1"
+                    if session.query(Trade).filter_by(order_id=oid).first():
+                        continue
+                    t = Trade(
+                        order_id=oid,
+                        symbol=trade.get("tradingSymbol"),
+                        side=trade.get("transactionType"),
+                        qty=int(trade.get("quantity", 0)),
+                        price=float(trade.get("price", 0)),
+                        timestamp=datetime.strptime(trade.get("exchangeTime"), "%Y-%m-%dT%H:%M:%S") if trade.get("exchangeTime") else datetime.utcnow()
+                    )
+                    session.add(t)
+                    new_trades += 1
+                except Exception as e:
+                    print(f"Skipping trade due to error: {e}")
+        session.commit()
+    session.close()
+    return new_trades, total_pulled
 
 @router.post("/sync_trades")
 def sync_trades():
     try:
-        trades = fetch_trades_combined()
-        db = SessionLocal()
-        new_trades = 0
-        for trade in trades:
-            exists = db.query(Trade).filter_by(order_id=trade["order_id"]).first()
-            if not exists:
-                db.add(Trade(**trade))
-                new_trades += 1
-        db.commit()
-        db.close()
-        return {"message": f"Synced {new_trades} new trades."}
-    except SQLAlchemyError as e:
-        return {"error": f"Database error: {str(e)}"}
+        new_v1, pulled_v1 = fetch_trade_history_v1()
+        return {"message": f"Pulled {pulled_v1} trades, synced {new_v1} new trades."}
     except Exception as e:
-        return {"error": f"General error: {str(e)}"}
-
-@router.get("/get_trades")
-def get_trades():
-    try:
-        db = SessionLocal()
-        results = db.query(Trade).order_by(Trade.timestamp.desc()).all()
-        db.close()
-        return [t.as_dict() for t in results]
-    except Exception as e:
-        return {"error": str(e)}
+        return {"error": f"General error: {e}"}
