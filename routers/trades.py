@@ -1,6 +1,6 @@
 
 from fastapi import APIRouter
-from services.dhan import fetch_trades
+from services.dhan import fetch_trades_combined
 from db import SessionLocal, Trade
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -9,7 +9,7 @@ router = APIRouter()
 @router.post("/sync_trades")
 def sync_trades():
     try:
-        trades = fetch_trades()
+        trades = fetch_trades_combined()
         db = SessionLocal()
         new_trades = 0
         for trade in trades:
