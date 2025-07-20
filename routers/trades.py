@@ -20,32 +20,37 @@ def sync_trades():
     if not ACCESS_TOKEN or not CLIENT_ID:
         return {"error": "Missing ACCESS_TOKEN or CLIENT_ID in environment"}
 
-    today = datetime.now().date()
-    all_trades = []
-    segment = 2  # NSE F&O only
+    url = f"{DHAN_BASE_URL}/orders"
+    print(f"[DEBUG] Fetching: {url}")
+    response = requests.get(url, headers=HEADERS)
 
-    for days_ago in range(0, 10):
-        trade_date = today - timedelta(days=days_ago)
-        trade_date_str = trade_date.strftime("%Y-%m-%d")
-        page = 1
+    if response.status_code != 200:
+        return {
+            "error": f"Failed to fetch orders: {response.status_code}",
+            "details": response.text
+        }
 
-        while True:
-            url = f"{DHAN_BASE_URL}/history/tradeHistory/{trade_date_str}/{trade_date_str}/{segment}"
-            print(f"[DEBUG] Fetching: {url}")
-            response = requests.get(url, headers=HEADERS)
-            if response.status_code == 404:
-                print(f"[INFO] No trades for {trade_date_str} on page {page}")
-                break
-            if response.status_code != 200:
-                return {"error": f"Failed to fetch trades: {response.status_code}", "details": response.text}
-            trades = response.json()
-            print(f"[DEBUG] Response from Dhan for {trade_date_str}, page {page}: {trades}")
-            if not trades:
-                break
-            all_trades.extend(trades)
-            page += 1
+    try:
+        trades = response.json()
+    except Exception as e:
+        return {"error": f"Failed to parse response: {e}"}
+
+    filtered = []
+    for trade in trades:
+        try:
+            if trade.get("orderStatus") == "EXECUTED" and "OPTIDX" in trade.get("tradingSymbol", ""):
+                filtered.append({
+                    "order_id": trade.get("orderId"),
+                    "symbol": trade.get("tradingSymbol"),
+                    "side": trade.get("transactionType"),
+                    "qty": trade.get("quantity"),
+                    "price": trade.get("price"),
+                    "timestamp": trade.get("exchangeTime")
+                })
+        except Exception as e:
+            print(f"[ERROR] Skipping trade due to: {e}")
 
     return {
-        "message": f"Fetched {len(all_trades)} trades",
-        "trades": all_trades[:5]  # Preview
+        "message": f"Fetched {len(filtered)} option trades",
+        "trades": filtered[:5]  # Preview
     }
