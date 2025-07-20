@@ -8,21 +8,25 @@ def fetch_trades():
         "access-token": os.getenv("DHAN_ACCESS_TOKEN"),
         "client-id": os.getenv("DHAN_CLIENT_ID")
     }
+
+    print("Fetching trades with headers:", headers)
+
     response = requests.get(url, headers=headers)
-    print("DHAN Response Status:", response.status_code)
-    print("DHAN Response Text:", response.text)
+    print("Response Code:", response.status_code)
+    print("Response Body:", response.text)
+
     if response.ok:
         data = response.json()
         trades = []
         for t in data:
             trades.append({
-                "order_id": t["orderId"],
-                "symbol": t["securityId"],
-                "side": t["transactionType"],
-                "qty": t["filledQty"],
-                "price": t["averagePrice"],
-                "timestamp": t["orderTimestamp"]
+                "order_id": t.get("orderId"),
+                "symbol": t.get("securityId"),
+                "side": t.get("transactionType"),
+                "qty": t.get("filledQty"),
+                "price": t.get("averagePrice"),
+                "timestamp": t.get("orderTimestamp")
             })
         return trades
     else:
-        return []
+        raise Exception(f"Dhan API error: {response.status_code} {response.text}")
